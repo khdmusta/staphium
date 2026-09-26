@@ -318,6 +318,26 @@
     return 1;
   }
 
+  // Deleted paragraph guard: the "designing interfaces" paragraph was
+  // removed by request. If hydration restores it, drop it again.
+  // Scoped strictly to the Philosophy box; matches by its unique phrase.
+  var ABOUT_DROP_MARK = "تصميم واجهات";
+
+  function applyAboutDrop() {
+    var box = document.querySelector("#about div.framer-279i20");
+    if (!box) return 0;
+    var ps = box.querySelectorAll("p");
+    var n = 0;
+    for (var i = ps.length - 1; i >= 0; i--) {
+      var tx = ps[i].textContent || "";
+      if (tx.indexOf(ABOUT_DROP_MARK) >= 0) {
+        if (ps[i].parentNode) ps[i].parentNode.removeChild(ps[i]);
+        n++;
+      }
+    }
+    return n;
+  }
+
   function aboutNeedsApply() {
     var h2 = document.querySelector('#about h2[data-styles-preset="s9_2EumJG"]');
     if (h2) {
@@ -329,6 +349,10 @@
     if (box && box.querySelector("p")) {
       var ft = box.querySelector("p").textContent || "";
       if (ft.indexOf(ABOUT_S1) !== 0) return true;
+      var all = box.querySelectorAll("p");
+      for (var j = 0; j < all.length; j++) {
+        if ((all[j].textContent || "").indexOf(ABOUT_DROP_MARK) >= 0) return true;
+      }
     }
     return false;
   }
@@ -402,6 +426,7 @@
     if (wp && !sameSeq(wasfSequence(wp), wasfDesired())) { rebuildWasf(wp); n++; }
     n += applyAboutHeading();
     n += applyAboutP1();
+    n += applyAboutDrop();
     if (n) state.brandApplies = (state.brandApplies || 0) + 1;
     return n;
   }
