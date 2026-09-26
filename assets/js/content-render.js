@@ -341,11 +341,17 @@
         n++;
       }
     }
+    var nav = document.querySelector('img[src="' + PORTRAIT_SRC + '"][width="160"]');
+    if (nav && nav.style.objectFit !== "cover") { nav.style.objectFit = "cover"; n++; }
     return n;
   }
 
   function portraitNeedsApply() {
-    return document.querySelectorAll('img[src*="' + PORTRAIT_OLD + '"],img[src*="' + PORTRAIT_OLD2 + '"]').length > 0;
+    if (document.querySelectorAll('img[src*="' + PORTRAIT_OLD + '"],img[src*="' + PORTRAIT_OLD2 + '"]').length > 0) return true;
+    // nav avatar must stay cover (not fill) or the portrait looks squished
+    var nav = document.querySelector('img[src="' + PORTRAIT_SRC + '"][width="160"]');
+    if (nav && nav.style.objectFit !== "cover") return true;
+    return false;
   }
 
   // Name / Title card lock (About details).
