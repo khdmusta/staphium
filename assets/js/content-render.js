@@ -250,6 +250,89 @@
   var ROLE_L1 = ["فنان", "بصري", "|", "مصمم", "جرافيك", "|", "فنان", "ثلاثي", "الأبعاد"];
   var ROLE_L2 = ["سرد", "بصري", "بدقة", "متناهية."];
 
+  /* ---------- about lock (same hydration-proofing, texts only) ------------
+   * Heading (animated word spans, 6 words) + first Philosophy paragraph.
+   * Runtime-created spans get visible styles (see rebuildWasf note).
+   */
+  var ABOUT_H = ["أصنع", "عوالم", "بصرية", "تروي", "أفكارًا", "حقيقية"];
+  var ABOUT_S1 = "أحوّل الأفكار إلى عوالم بصرية لها قصة.";
+  var ABOUT_REST = "أعمل بين التصميم الجرافيكي والفن البصري وثلاثي الأبعاد، حيث أبحث عن الطريقة التي يمكن للفكرة أن تتحول بها إلى مشهد، إحساس، وتجربة تُرى قبل أن تُشرح. من الهوية البصرية إلى المشاهد ثلاثية الأبعاد، أبني كل عمل انطلاقًا من مفهوم واضح، ثم أطوّره عبر التكوين، الإضاءة، اللون والتفاصيل لصناعة لغة بصرية متكاملة. بالنسبة لي، الصورة ليست مجرد شكل جميل؛ إنها وسيلة للسرد، وبناء الإحساس، وإيصال فكرة تبقى في الذاكرة.";
+
+  function sanitizeAnimStyle(st) {
+    return String(st || "")
+      .replace(/-webkit-filter\s*:[^;]+;?/g, "")
+      .replace(/(^|;)\s*filter\s*:[^;]+;?/g, "$1")
+      .replace(/(^|;)\s*opacity\s*:[^;]+;?/g, "$1")
+      .replace(/(^|;)\s*transform\s*:[^;]+;?/g, "$1")
+      .replace(/;{2,}/g, ";");
+  }
+
+  function aboutWordSpans(h2) {
+    var all = h2.querySelectorAll("span");
+    var words = [];
+    for (var i = 0; i < all.length; i++) {
+      if (!all[i].querySelector("span") && all[i].textContent !== "") words.push(all[i]);
+    }
+    return words;
+  }
+
+  function applyAboutHeading() {
+    var h2 = document.querySelector('#about h2[data-styles-preset="s9_2EumJG"]');
+    if (!h2) return 0;
+    var ws = aboutWordSpans(h2);
+    if (!ws.length) return 0;
+    var changed = 0;
+    for (var i = 0; i < ABOUT_H.length; i++) {
+      var slot = ws[i];
+      if (!slot) {
+        var c = ws[ws.length - 1].cloneNode(false);
+        c.setAttribute("style", sanitizeAnimStyle(c.getAttribute("style")));
+        c.textContent = ABOUT_H[i];
+        var lastTop = ws[ws.length - 1];
+        lastTop.parentNode.insertBefore(document.createTextNode(" "), lastTop.nextSibling);
+        lastTop.parentNode.insertBefore(c, lastTop.nextSibling.nextSibling);
+        ws.push(c);
+        changed++;
+      } else if (slot.textContent !== ABOUT_H[i]) { slot.textContent = ABOUT_H[i]; changed++; }
+    }
+    while (ws.length > ABOUT_H.length) {
+      var extra = ws.pop();
+      if (extra.parentNode) extra.parentNode.removeChild(extra);
+      changed++;
+    }
+    return changed ? 1 : 0;
+  }
+
+  function applyAboutP1() {
+    var box = document.querySelector("#about div.framer-279i20");
+    if (!box) return 0;
+    var ps = box.querySelectorAll("p");
+    if (!ps.length) return 0;
+    var first = ps[0];
+    var cur = first.textContent || "";
+    if (cur.indexOf(ABOUT_S1) === 0 && cur.indexOf("تبقى في الذاكرة") >= 0) return 0;
+    var lead = first.querySelector("span");
+    var color = lead ? (lead.getAttribute("style") || "") : "";
+    first.innerHTML = '<span style="' + color + '" class="framer-text"><strong class="framer-text">' +
+      escHtml(ABOUT_S1) + "</strong></span> " + escHtml(ABOUT_REST);
+    return 1;
+  }
+
+  function aboutNeedsApply() {
+    var h2 = document.querySelector('#about h2[data-styles-preset="s9_2EumJG"]');
+    if (h2) {
+      var ws = aboutWordSpans(h2);
+      if (ws.length !== ABOUT_H.length) return true;
+      for (var i = 0; i < ABOUT_H.length; i++) if (ws[i].textContent !== ABOUT_H[i]) return true;
+    }
+    var box = document.querySelector("#about div.framer-279i20");
+    if (box && box.querySelector("p")) {
+      var ft = box.querySelector("p").textContent || "";
+      if (ft.indexOf(ABOUT_S1) !== 0) return true;
+    }
+    return false;
+  }
+
   function escHtml(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
@@ -303,6 +386,7 @@
     for (var i = 0; i < hs.length; i++) if (hs[i].textContent !== BRAND_NAME) return true;
     var wp = document.querySelector('p[data-styles-preset="ys31T7g4J"]');
     if (wp && !sameSeq(wasfSequence(wp), wasfDesired())) return true;
+    if (aboutNeedsApply()) return true;
     return false;
   }
 
@@ -316,6 +400,8 @@
     }
     var wp = document.querySelector('p[data-styles-preset="ys31T7g4J"]');
     if (wp && !sameSeq(wasfSequence(wp), wasfDesired())) { rebuildWasf(wp); n++; }
+    n += applyAboutHeading();
+    n += applyAboutP1();
     if (n) state.brandApplies = (state.brandApplies || 0) + 1;
     return n;
   }
@@ -327,8 +413,10 @@
     var targets = [];
     var nav = document.querySelector('nav[data-framer-name="Header"]');
     var hero = document.getElementById("hero");
+    var about = document.getElementById("about");
     if (nav) targets.push(nav);
     if (hero) targets.push(hero);
+    if (about) targets.push(about);
     if (!targets.length) return;
     brandObserver = new MutationObserver(function () {
       clearTimeout(brandTimer);
