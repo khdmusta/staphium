@@ -1,0 +1,36 @@
+/* Guard: keep the removed template-promo card and Framer badge hidden
+   even if the Framer runtime re-injects them during hydration.
+   Targets ONLY those two elements — nothing else on the site. */
+#__framer-badge-container {
+  display: none !important;
+}
+[data-framer-name="Template Buy Button"] {
+  display: none !important;
+}
+
+/* Skill items: pin to the viewer's right (Framer set them to logical
+   "end", which lands on the left in RTL). Scoped to skills only. */
+#skills div[data-framer-name="Item"] p {
+  text-align: right !important;
+}
+
+/* Hero title size (brand tweak — scoped to the hero h1 only,
+   mirrors Framer breakpoints so responsiveness is preserved) */
+h1[data-styles-preset="fxFFIrFXJ"] {
+  --framer-font-size: 72px !important;
+}
+@media (max-width:1439px) and (min-width:1200px) {
+  h1[data-styles-preset="fxFFIrFXJ"] {
+    --framer-font-size: 64px !important;
+  }
+}
+@media (max-width:1199px) and (min-width:810px) {
+  h1[data-styles-preset="fxFFIrFXJ"] {
+    --framer-font-size: 48px !important;
+  }
+}
+@media (max-width:809px) {
+  h1[data-styles-preset="fxFFIrFXJ"] {
+    --framer-font-size: 32px !important;
+  }
+}
