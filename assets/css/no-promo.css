@@ -8,6 +8,12 @@
   display: none !important;
 }
 
+/* Skill items: pin to the viewer's right (Framer set them to logical
+   "end", which lands on the left in RTL). Scoped to skills only. */
+#skills div[data-framer-name="Item"] p {
+  text-align: right !important;
+}
+
 /* Hero title size (brand tweak — scoped to the hero h1 only,
    mirrors Framer breakpoints so responsiveness is preserved) */
 h1[data-styles-preset="fxFFIrFXJ"] {
