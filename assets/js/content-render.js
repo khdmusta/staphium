@@ -326,22 +326,51 @@
   // Portrait lock: personal photo replaced by request (assets/img/photo.jpg).
   // If hydration restores the old Framer URL, swap it back.
   var PORTRAIT_OLD = "4p9mLKoeZ1tiXrKIhn4h9kLajI";
+  var PORTRAIT_OLD2 = "9AKT1fZbDSvRjKLD6qnAdbpHEJw";
   var PORTRAIT_SRC = "assets/img/photo.jpg";
 
   function applyPortrait() {
-    var imgs = document.querySelectorAll('img[src*="' + PORTRAIT_OLD + '"]');
+    var marks = [PORTRAIT_OLD, PORTRAIT_OLD2];
     var n = 0;
-    for (var i = 0; i < imgs.length; i++) {
-      imgs[i].removeAttribute("srcset");
-      imgs[i].removeAttribute("sizes");
-      imgs[i].setAttribute("src", PORTRAIT_SRC);
-      n++;
+    for (var k = 0; k < marks.length; k++) {
+      var imgs = document.querySelectorAll('img[src*="' + marks[k] + '"]');
+      for (var i = 0; i < imgs.length; i++) {
+        imgs[i].removeAttribute("srcset");
+        imgs[i].removeAttribute("sizes");
+        imgs[i].setAttribute("src", PORTRAIT_SRC);
+        n++;
+      }
     }
     return n;
   }
 
   function portraitNeedsApply() {
-    return document.querySelectorAll('img[src*="' + PORTRAIT_OLD + '"]').length > 0;
+    return document.querySelectorAll('img[src*="' + PORTRAIT_OLD + '"],img[src*="' + PORTRAIT_OLD2 + '"]').length > 0;
+  }
+
+  // Name / Title card lock (About details).
+  var CARD_NAME = "مصطفى";
+  var CARD_ROLE = "مصمم بصري ومصمم جرافيك و فنان ثلاثي الابعاد";
+
+  function applyNameTitle() {
+    var box = document.querySelector('div[data-framer-name="Name / Title"]');
+    if (!box) return 0;
+    var n = 0;
+    var h = box.querySelector("h4");
+    if (h && h.textContent !== CARD_NAME) { h.textContent = CARD_NAME; n++; }
+    var p = box.querySelector("p");
+    if (p && p.textContent !== CARD_ROLE) { p.textContent = CARD_ROLE; n++; }
+    return n;
+  }
+
+  function nameTitleNeedsApply() {
+    var box = document.querySelector('div[data-framer-name="Name / Title"]');
+    if (!box) return false;
+    var h = box.querySelector("h4");
+    if (h && h.textContent !== CARD_NAME) return true;
+    var p = box.querySelector("p");
+    if (p && p.textContent !== CARD_ROLE) return true;
+    return false;
   }
 
   function applyAboutDrop() {
@@ -376,6 +405,7 @@
       }
     }
     if (portraitNeedsApply()) return true;
+    if (nameTitleNeedsApply()) return true;
     return false;
   }
 
@@ -450,6 +480,7 @@
     n += applyAboutP1();
     n += applyAboutDrop();
     n += applyPortrait();
+    n += applyNameTitle();
     if (n) state.brandApplies = (state.brandApplies || 0) + 1;
     return n;
   }
