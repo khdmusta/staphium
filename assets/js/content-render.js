@@ -318,14 +318,28 @@
     return 1;
   }
 
-  // Skills lock: 9 cards in DOM order (3 categories x responsive copies).
-  // Category = floor(cardIndex / 3). Titles + 5 items each, texts only.
+  // Skills lock: category comes from the outer card wrapper name
+  // (Card - EN 1 / AR 2 / AR 3), so it works with any number of
+  // responsive copies (React prunes inactive breakpoint variants).
+  // Titles + 5 items each, texts only.
   var SKILL_T = ["خبرات التصميم", "الفن ثلاثي الأبعاد", "التصميم الجرافيكي"];
   var SKILL_I = [
     ["الهوية البصرية", "التصميم الجرافيكي", "الحملات البصرية", "تصميم الملصقات", "التصميم التحريري"],
     ["النمذجة ثلاثية الأبعاد", "تصميم المشاهد", "الخامات والإضاءة", "الإخراج ثلاثي الأبعاد", "التحريك البصري"],
     ["الهوية البصرية", "الحملات البصرية", "الملصقات", "التصميم التحريري", "التكوين البصري"]
   ];
+
+  function skillCat(titleEl) {
+    var el = titleEl;
+    while (el && el !== document.body) {
+      var nm = el.getAttribute ? el.getAttribute("data-framer-name") : null;
+      if (nm === "Card - EN 1") return 0;
+      if (nm === "Card - AR 2") return 1;
+      if (nm === "Card - AR 3") return 2;
+      el = el.parentElement;
+    }
+    return -1;
+  }
 
   function skillCards() {
     var scope = document.getElementById("skills");
@@ -335,10 +349,11 @@
 
   function applySkills() {
     var titles = skillCards();
-    if (titles.length !== 9) return 0;
+    if (!titles.length) return 0;
     var n = 0;
-    for (var k = 0; k < 9; k++) {
-      var cat = Math.floor(k / 3);
+    for (var k = 0; k < titles.length; k++) {
+      var cat = skillCat(titles[k]);
+      if (cat < 0) continue;
       var h = titles[k].querySelector("h6");
       if (h && h.textContent !== SKILL_T[cat]) { h.textContent = SKILL_T[cat]; n++; }
       var card = titles[k].closest('div[data-framer-name="Container"]');
@@ -353,9 +368,10 @@
 
   function skillsNeedApply() {
     var titles = skillCards();
-    if (titles.length !== 9) return false;
-    for (var k = 0; k < 9; k++) {
-      var cat = Math.floor(k / 3);
+    if (!titles.length) return false;
+    for (var k = 0; k < titles.length; k++) {
+      var cat = skillCat(titles[k]);
+      if (cat < 0) continue;
       var h = titles[k].querySelector("h6");
       if (h && h.textContent !== SKILL_T[cat]) return true;
       var card = titles[k].closest('div[data-framer-name="Container"]');
