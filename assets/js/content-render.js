@@ -318,6 +318,55 @@
     return 1;
   }
 
+  // Skills lock: 9 cards in DOM order (3 categories x responsive copies).
+  // Category = floor(cardIndex / 3). Titles + 5 items each, texts only.
+  var SKILL_T = ["خبرات التصميم", "الفن ثلاثي الأبعاد", "السرد البصري"];
+  var SKILL_I = [
+    ["الهوية البصرية", "التصميم الجرافيكي", "الحملات البصرية", "تصميم الملصقات", "التصميم التحريري"],
+    ["تصميم المشاهد ثلاثية الأبعاد", "النمذجة ثلاثية الأبعاد", "الخامات والإضاءة", "الإخراج البصري", "التحريك ثلاثي الأبعاد"],
+    ["تطوير الفكرة والمفهوم", "بناء العوالم البصرية", "السرد بالصورة", "الإخراج الفني", "صناعة المشاهد البصرية"]
+  ];
+
+  function skillCards() {
+    var scope = document.getElementById("skills");
+    if (!scope) return [];
+    return scope.querySelectorAll('div[data-framer-name="Title"]');
+  }
+
+  function applySkills() {
+    var titles = skillCards();
+    if (titles.length !== 9) return 0;
+    var n = 0;
+    for (var k = 0; k < 9; k++) {
+      var cat = Math.floor(k / 3);
+      var h = titles[k].querySelector("h6");
+      if (h && h.textContent !== SKILL_T[cat]) { h.textContent = SKILL_T[cat]; n++; }
+      var card = titles[k].closest('div[data-framer-name="Container"]');
+      var scope2 = card || titles[k].parentNode;
+      var ps = scope2.querySelectorAll('div[data-framer-name="Item"] p');
+      for (var j = 0; j < Math.min(5, ps.length); j++) {
+        if (ps[j].textContent !== SKILL_I[cat][j]) { ps[j].textContent = SKILL_I[cat][j]; n++; }
+      }
+    }
+    return n;
+  }
+
+  function skillsNeedApply() {
+    var titles = skillCards();
+    if (titles.length !== 9) return false;
+    for (var k = 0; k < 9; k++) {
+      var cat = Math.floor(k / 3);
+      var h = titles[k].querySelector("h6");
+      if (h && h.textContent !== SKILL_T[cat]) return true;
+      var card = titles[k].closest('div[data-framer-name="Container"]');
+      var scope2 = card || titles[k].parentNode;
+      var ps = scope2.querySelectorAll('div[data-framer-name="Item"] p');
+      for (var j = 0; j < Math.min(5, ps.length); j++) {
+        if (ps[j].textContent !== SKILL_I[cat][j]) return true;
+      }
+    }
+    return false;
+  }
   // Deleted paragraph guard: the "designing interfaces" paragraph was
   // removed by request. If hydration restores it, drop it again.
   // Scoped strictly to the Philosophy box; matches by its unique phrase.
@@ -412,6 +461,7 @@
     }
     if (portraitNeedsApply()) return true;
     if (nameTitleNeedsApply()) return true;
+    if (skillsNeedApply()) return true;
     return false;
   }
 
@@ -487,6 +537,7 @@
     n += applyAboutDrop();
     n += applyPortrait();
     n += applyNameTitle();
+    n += applySkills();
     if (n) state.brandApplies = (state.brandApplies || 0) + 1;
     return n;
   }
@@ -499,9 +550,11 @@
     var nav = document.querySelector('nav[data-framer-name="Header"]');
     var hero = document.getElementById("hero");
     var about = document.getElementById("about");
+    var skills = document.getElementById("skills");
     if (nav) targets.push(nav);
     if (hero) targets.push(hero);
     if (about) targets.push(about);
+    if (skills) targets.push(skills);
     if (!targets.length) return;
     brandObserver = new MutationObserver(function () {
       clearTimeout(brandTimer);
