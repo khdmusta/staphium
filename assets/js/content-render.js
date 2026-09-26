@@ -323,6 +323,27 @@
   // Scoped strictly to the Philosophy box; matches by its unique phrase.
   var ABOUT_DROP_MARK = "تصميم واجهات";
 
+  // Portrait lock: personal photo replaced by request (assets/img/photo.jpg).
+  // If hydration restores the old Framer URL, swap it back.
+  var PORTRAIT_OLD = "4p9mLKoeZ1tiXrKIhn4h9kLajI";
+  var PORTRAIT_SRC = "assets/img/photo.jpg";
+
+  function applyPortrait() {
+    var imgs = document.querySelectorAll('img[src*="' + PORTRAIT_OLD + '"]');
+    var n = 0;
+    for (var i = 0; i < imgs.length; i++) {
+      imgs[i].removeAttribute("srcset");
+      imgs[i].removeAttribute("sizes");
+      imgs[i].setAttribute("src", PORTRAIT_SRC);
+      n++;
+    }
+    return n;
+  }
+
+  function portraitNeedsApply() {
+    return document.querySelectorAll('img[src*="' + PORTRAIT_OLD + '"]').length > 0;
+  }
+
   function applyAboutDrop() {
     var box = document.querySelector("#about div.framer-279i20");
     if (!box) return 0;
@@ -354,6 +375,7 @@
         if ((all[j].textContent || "").indexOf(ABOUT_DROP_MARK) >= 0) return true;
       }
     }
+    if (portraitNeedsApply()) return true;
     return false;
   }
 
@@ -427,6 +449,7 @@
     n += applyAboutHeading();
     n += applyAboutP1();
     n += applyAboutDrop();
+    n += applyPortrait();
     if (n) state.brandApplies = (state.brandApplies || 0) + 1;
     return n;
   }
