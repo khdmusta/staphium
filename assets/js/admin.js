@@ -379,7 +379,7 @@
 
   /* ---- Behance-style project editor (+ gallery) ---- */
   function openProjectForm(row) {
-    state.editing = { table: "projects", id: row ? row.id : null, gallery: [] };
+    state.editing = { table: "projects", id: row ? row.id : null, gallery: [], galleryDirty: false };
     setFoot("behance");
     modalTitle.textContent = row ? "تحرير المشروع" : "انشر مشروعاً جديداً";
     var r = row || {};
@@ -480,6 +480,7 @@
         '<span class="gal-n">' + (i + 1) + "</span>";
       d.querySelector(".gal-x").addEventListener("click", function () {
         state.editing.gallery.splice(i, 1);
+        state.editing.galleryDirty = true;
         renderGallery();
       });
       d.querySelectorAll("[data-mv]").forEach(function (b) {
@@ -488,6 +489,7 @@
           var j = i + Number(b.getAttribute("data-mv"));
           if (j < 0 || j >= g.length) return;
           var tmp = g[i]; g[i] = g[j]; g[j] = tmp;
+          state.editing.galleryDirty = true;
           renderGallery();
         });
       });
@@ -524,7 +526,9 @@
           fill.style.width = Math.round(((done + p / 100) / files.length) * 100) + "%";
         }).then(function (url) {
           done++;
+          if (!state.editing) return;
           state.editing.gallery.push(url);
+          state.editing.galleryDirty = true;
           renderGallery();
           toast("تم رفع صورة " + done + " من " + files.length);
           next(k + 1);
@@ -563,21 +567,31 @@
     var c = collectForm(ed.table);
     if (c.bad) {
       modalErr.textContent = c.bad.key === "slug"
-        ? "الرابط (slug) يجب أن يكون أحرفاً إنجليزية صغيرة وأرقاماً وشرطات فقط"
+        ? "الرابط (slug) إجباري: أحرف إنجليزية صغيرة وأرقام وشرطات فقط (مثال: safe-arrival)"
         : "أكمل الحقل المطلوب: " + c.bad.label;
       modalErr.style.display = "block";
+      var badInput = modalBody.querySelector('[data-key="' + c.bad.key + '"]');
+      if (badInput && badInput.focus) { try { badInput.focus(); } catch (e) {} }
+      var md = document.querySelector(".modal");
+      if (md) md.scrollTop = 0;
+      overlay.scrollTop = 0;
       return;
     }
     if (publish === true) c.data.is_published = true;
     if (publish === false) c.data.is_published = false;
     if (ed.id) c.data.id = ed.id;
-    var galUrls = (ed.table === "projects" && ed.gallery) ? ed.gallery.slice() : null;
+    var galUrls = (ed.table === "projects") ? (ed.gallery || []).slice() : null;
+    var galDirty = !!(ed.table === "projects" && (ed.galleryDirty || (galUrls && galUrls.length)));
     btnSave.disabled = true; btnDraft.disabled = true;
     api().upsertRow(ed.table, c.data).then(function (saved) {
-      if (galUrls !== null) {
-        return api().replaceImages(saved.id, galUrls).then(function () { return saved; });
-      }
-      return saved;
+      if (galUrls === null || !galDirty) return saved;
+      return api().replaceImages(saved.id, galUrls).then(function () { return saved; }).catch(function (e) {
+        var m = String((e && e.message) || e || "");
+        if (m.indexOf("project_images") >= 0 || m.indexOf("relation") >= 0 || m.indexOf("schema cache") >= 0) {
+          throw new Error("تم حفظ المشروع، لكن صور المعرض تحتاج جدولاً غير موجود — نفّذ supabase/migration-003-project-images.sql ثم أعد فتح المشروع وحفظه");
+        }
+        throw e;
+      });
     }).then(function () {
       toast(publish === false ? "حُفظ كمسودة" : "تم الحفظ والنشر");
       closeOverlay();
