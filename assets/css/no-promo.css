@@ -18,8 +18,15 @@ section[data-framer-name="Articles"] {
 }
 
 /* Removed menu item guard: the blog link was deleted from the footer
-   menu by request. Hide the whole item if the runtime restores it. */
+   menu by request. Hide the whole item if the runtime restores it
+   (this also covers the mobile fullscreen menu, which is client-rendered
+   with the same structure). */
 div.framer-vwbw8t:has(a[href="./blog"]) {
+  display: none !important;
+}
+/* Fallback: hide any blog link anywhere, should one ever render
+   outside the known item structure. */
+a[href="./blog"] {
   display: none !important;
 }
 
