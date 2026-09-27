@@ -1,8 +1,7 @@
 /* ============================================================================
- * ADMIN — dashboard logic (Supabase Auth + CRUD + imgbb uploads)
- * Pages: login → tabs (projects / testimonials / posts) → modal form
- * All content Arabic-first (RTL). Images upload to imgbb, URLs stored in
- * Supabase rows. Publish = is_published flag read by content-render.js.
+ * ADMIN — real dashboard: sidebar views, stats, CRUD, imgbb uploads, settings
+ * Backend: Supabase (projects / testimonials / posts / site_settings) + Auth.
+ * Design: same language as the site (Thmanyah, #f7f7f7, white cards, pills).
  * ============================================================================ */
 (function () {
   "use strict";
@@ -79,7 +78,19 @@
     }
   };
 
-  var state = { table: "projects", rows: { projects: [], testimonials: [], posts: [] }, editing: null };
+  var VIEWS = {
+    dashboard: "لوحة القيادة",
+    projects: "المشاريع",
+    testimonials: "آراء العملاء",
+    posts: "المدونة",
+    settings: "إعدادات الموقع"
+  };
+
+  var state = {
+    view: "dashboard",
+    rows: { projects: [], testimonials: [], posts: [] },
+    editing: null
+  };
 
   /* ---------------- auth ---------------- */
   function showLogin(msg) {
@@ -91,27 +102,28 @@
     $("#login-view").classList.add("hidden");
     $("#app-view").classList.remove("hidden");
   }
-  function authError(ar, raw) {
+  function authError(raw) {
     var m = String((raw && raw.message) || raw || "");
     if (m.indexOf("Invalid login") >= 0) return "بيانات الدخول غير صحيحة";
     if (m.indexOf("Failed to fetch") >= 0 || m.indexOf("NETWORK") >= 0) return "تعذر الاتصال — تحقق من الإنترنت وإعداد Supabase";
-    return ar || "حدث خطأ — حاول مجدداً";
+    return "حدث خطأ — حاول مجدداً";
   }
 
   function boot() {
+    wireChrome();
     if (!api() || !api().configured) {
       showLogin("أكمل الإعداد أولاً: الصق مفاتيح Supabase في assets/js/cms-config.js — راجع docs/CMS-SETUP.md");
       $("#login-btn").disabled = true;
-      var w = $("#cfg-warn");
       return;
     }
     var client = api().getClient();
     client.auth.getSession().then(function (s) {
-      if (s.data.session) { showApp(); loadAll(); }
+      if (s.data.session) { enterApp(s.data.session); }
       else showLogin();
     }).catch(function () { showLogin(); });
     client.auth.onAuthStateChange(function (ev, session) {
-      if (session) { showApp(); loadAll(); } else showLogin();
+      if (session) enterApp(session);
+      else showLogin();
     });
 
     $("#login-form").addEventListener("submit", function (ev) {
@@ -124,10 +136,9 @@
         password: $("#login-pass").value
       }).then(function (res) {
         if (res.error) throw res.error;
-        showApp(); loadAll();
       }).catch(function (err) {
         var e = $("#login-err");
-        e.textContent = authError(null, err);
+        e.textContent = authError(err);
         e.style.display = "block";
       }).finally(function () { btn.disabled = false; });
     });
@@ -135,32 +146,56 @@
     $("#logout-btn").addEventListener("click", function () {
       client.auth.signOut().finally(function () { location.reload(); });
     });
+  }
 
+  function enterApp(session) {
+    showApp();
+    try {
+      var em = (session.user && session.user.email) || "";
+      $("#user-chip").textContent = em;
+    } catch (e) {}
+    loadAll();
+  }
+
+  /* ---------------- chrome (sidebar / topbar) ---------------- */
+  function wireChrome() {
+    document.querySelectorAll(".side-link[data-view]").forEach(function (b) {
+      b.addEventListener("click", function () { switchView(b.getAttribute("data-view")); });
+    });
+    document.querySelectorAll("[data-goto]").forEach(function (b) {
+      b.addEventListener("click", function () { switchView(b.getAttribute("data-goto")); });
+    });
+    document.querySelectorAll("[data-new]").forEach(function (b) {
+      b.addEventListener("click", function () { openForm(b.getAttribute("data-new"), null); });
+    });
+    var mb = $("#menu-btn");
+    if (mb) mb.addEventListener("click", function () { document.body.classList.toggle("nav-open"); });
     wireSettings();
   }
 
-  /* ---------------- tabs ---------------- */
-  document.querySelectorAll(".rzg-tab").forEach(function (t) {
-    t.addEventListener("click", function () {
-      document.querySelectorAll(".rzg-tab").forEach(function (x) { x.classList.remove("active"); });
-      t.classList.add("active");
-      state.table = t.getAttribute("data-tab");
-      ["projects", "testimonials", "posts", "settings"].forEach(function (k) {
-        $("#panel-" + k).classList.toggle("hidden", k !== state.table);
-      });
-      if (state.table === "settings") loadSettings();
+  function switchView(v) {
+    if (!VIEWS[v]) return;
+    state.view = v;
+    document.querySelectorAll(".side-link[data-view]").forEach(function (x) {
+      x.classList.toggle("active", x.getAttribute("data-view") === v);
     });
-  });
-  document.querySelectorAll("[data-new]").forEach(function (b) {
-    b.addEventListener("click", function () { openForm(b.getAttribute("data-new"), null); });
-  });
+    ["dashboard", "projects", "testimonials", "posts", "settings"].forEach(function (k) {
+      $("#view-" + k).classList.toggle("hidden", k !== v);
+    });
+    $("#page-title").textContent = VIEWS[v];
+    document.body.classList.remove("nav-open");
+    if (v === "settings") loadSettings();
+    if (v === "dashboard") renderDashboard();
+  }
 
   /* ---------------- lists ---------------- */
   function loadAll() {
     ["projects", "testimonials", "posts"].forEach(loadTable);
-    loadSettings();
-    var w = $("#cfg-warn");
-    if (!api().configReady) { w.textContent = "ملف الإعداد غير مكتمل — راجع docs/CMS-SETUP.md"; w.style.display = "block"; }
+    if (!api().configReady) {
+      var w = $("#cfg-warn");
+      w.textContent = "ملف الإعداد غير مكتمل — راجع docs/CMS-SETUP.md";
+      w.style.display = "block";
+    }
   }
 
   function loadTable(table) {
@@ -169,9 +204,14 @@
     api().listAll(table).then(function (rows) {
       state.rows[table] = rows;
       renderList(table);
+      renderDashboard();
     }).catch(function (err) {
       list.innerHTML = '<div class="empty">تعذر التحميل: ' + esc(err.message || err) + "</div>";
     });
+  }
+
+  function statusBadge(row) {
+    return row.is_published ? '<span class="badge pub">منشور</span>' : '<span class="badge draft">مسودة</span>';
   }
 
   function renderList(table) {
@@ -179,7 +219,7 @@
     var list = $("#list-" + table);
     var rows = state.rows[table];
     if (!rows.length) {
-      list.innerHTML = '<div class="empty">لا عناصر بعد — اضغط «' + esc("جديد") + "» للإضافة</div>";
+      list.innerHTML = '<div class="empty">لا عناصر بعد — اضغط زر الإضافة بالأعلى</div>';
       return;
     }
     list.innerHTML = "";
@@ -187,16 +227,14 @@
       var card = document.createElement("div");
       card.className = "card";
       var thumb = row[cfg.thumbKey]
-        ? '<img class="thumb' + (cfg.thumbRound ? " round" : "") + '" src="' + esc(row[cfg.thumbKey]) + '" alt="">'
+        ? '<img class="thumb' + (cfg.thumbRound ? " round" : "") + '" src="' + esc(row[cfg.thumbKey]) + '" alt="" loading="lazy">'
         : '<div class="thumb"></div>';
       card.innerHTML =
         thumb +
         '<div class="card-body">' +
           '<div class="card-title">' + esc(row[cfg.titleKey] || "—") + "</div>" +
           '<div class="card-sub">' + esc(row[cfg.subKey] || "") + "</div>" +
-          (row.is_published
-            ? '<span class="badge pub">منشور</span>'
-            : '<span class="badge draft">مسودة</span>') +
+          statusBadge(row) +
           '<div class="card-actions">' +
             '<button class="btn btn-secondary btn-small" data-act="edit">تعديل</button>' +
             '<button class="btn btn-secondary btn-small" data-act="toggle">' +
@@ -212,11 +250,43 @@
   }
 
   function quickToggle(table, row) {
-    var patch = { id: row.id, is_published: !row.is_published };
-    api().upsertRow(table, patch).then(function () {
+    api().upsertRow(table, { id: row.id, is_published: !row.is_published }).then(function () {
       toast(row.is_published ? "أُلغي النشر" : "تم النشر في الموقع");
       loadTable(table);
     }).catch(function (err) { toast("فشل: " + (err.message || err), true); });
+  }
+
+  /* ---------------- dashboard home ---------------- */
+  function renderDashboard() {
+    var pr = state.rows.projects, ts = state.rows.testimonials, ps = state.rows.posts;
+    var pub = pr.filter(function (r) { return r.is_published; }).length;
+    $("#stat-pub").textContent = pub;
+    $("#stat-draft").textContent = pr.length - pub;
+    $("#stat-tst").textContent = ts.length;
+    $("#stat-post").textContent = ps.length;
+    var cp = $("#count-projects"), ct = $("#count-testimonials"), cpo = $("#count-posts");
+    if (cp) cp.textContent = pr.length;
+    if (ct) ct.textContent = ts.length;
+    if (cpo) cpo.textContent = ps.length;
+    miniList($("#recent-projects"), pr.slice(0, 3), TABLES.projects, "projects");
+    miniList($("#recent-testimonials"), ts.slice(0, 3), TABLES.testimonials, "testimonials");
+  }
+
+  function miniList(box, rows, cfg, table) {
+    if (!box) return;
+    if (!rows.length) { box.innerHTML = '<div class="empty">لا عناصر بعد</div>'; return; }
+    box.innerHTML = "";
+    rows.forEach(function (row) {
+      var d = document.createElement("div");
+      d.className = "mini-row";
+      var im = row[cfg.thumbKey]
+        ? '<img class="' + (cfg.thumbRound ? "round" : "") + '" src="' + esc(row[cfg.thumbKey]) + '" alt="" loading="lazy">'
+        : "";
+      d.innerHTML = im + '<div class="t">' + esc(row[cfg.titleKey] || "—") + "</div>" + statusBadge(row);
+      d.style.cursor = "pointer";
+      d.addEventListener("click", function () { openForm(table, row); });
+      box.appendChild(d);
+    });
   }
 
   /* ---------------- modal ---------------- */
@@ -225,17 +295,25 @@
       btnSave = $("#modal-save"), btnDraft = $("#modal-draft"), btnCancel = $("#modal-cancel");
 
   function openOverlay() { overlay.classList.add("open"); modalErr.style.display = "none"; }
-  function closeOverlay() { overlay.classList.remove("open"); state.editing = null; }
+  function closeOverlay() {
+    overlay.classList.remove("open");
+    state.editing = null;
+    var y = $("#modal-del-yes");
+    if (y) y.remove();
+  }
   btnCancel.addEventListener("click", closeOverlay);
   overlay.addEventListener("click", function (ev) { if (ev.target === overlay) closeOverlay(); });
 
   function setFoot(mode) {
-    // mode: form | confirm | behance (behance uses its own publish bar)
     var beh = (mode === "behance");
     document.querySelector(".modal").classList.toggle("wide", beh);
     document.querySelector(".modal-foot").style.display = beh ? "none" : "";
     btnSave.style.display = mode === "form" ? "" : "none";
     btnDraft.style.display = mode === "form" ? "" : "none";
+    if (mode === "confirm") {
+      document.querySelector(".modal").classList.remove("wide");
+      document.querySelector(".modal-foot").style.display = "";
+    }
   }
 
   function fieldHTML(f, val) {
@@ -290,7 +368,7 @@
     openOverlay();
   }
 
-  /* ---- Behance-style project editor: cover first, live card preview ---- */
+  /* ---- Behance-style project editor ---- */
   function openProjectForm(row) {
     state.editing = { table: "projects", id: row ? row.id : null };
     setFoot("behance");
@@ -333,15 +411,17 @@
     wireUploader(box);
 
     function refreshPreview() {
-      var title = (modalBody.querySelector('[data-key="title"]') || {}).value || "اسم المشروع";
-      var cap = (modalBody.querySelector('[data-key="caption"]') || {}).value || "السطر التعريفي";
+      var ti = modalBody.querySelector('[data-key="title"]');
+      var ci = modalBody.querySelector('[data-key="caption"]');
+      var title = (ti && ti.value) || "اسم المشروع";
+      var cap = (ci && ci.value) || "السطر التعريفي";
       var src = box.querySelector("img.preview").src || "";
       var card = modalBody.querySelector(".bh-preview-card");
       card.querySelector(".t").textContent = title;
       card.querySelector(".c").textContent = cap;
-      var ci = card.querySelector("img");
-      if (src) { ci.src = src; ci.style.display = "block"; }
-      else ci.style.display = "none";
+      var ci2 = card.querySelector("img");
+      if (src) { ci2.src = src; ci2.style.display = "block"; }
+      else ci2.style.display = "none";
       var empty = box.querySelector(".bh-cover-empty");
       if (empty) empty.style.display = src ? "none" : "";
     }
@@ -351,19 +431,14 @@
     box.addEventListener("preview-update", refreshPreview);
     refreshPreview();
 
-    modalBody.querySelector('[data-bh="publish"]').addEventListener("click", function () { saveFlow(true); });
-    modalBody.querySelector('[data-bh="draft"]').addEventListener("click", function () { saveFlow(false); });
-    modalBody.querySelector('[data-bh="cancel"]').addEventListener("click", closeOverlay);
     var sw = modalBody.querySelector('[data-key="is_published"]');
     var lbl = modalBody.querySelector(".publish-state");
     function syncLbl() { lbl.textContent = sw.checked ? "منشور في الموقع" : "مسودة (مخفي)"; }
     sw.addEventListener("change", syncLbl);
     syncLbl();
-    // keep publish switch in sync when using the bar buttons
-    var pubBtn = modalBody.querySelector('[data-bh="publish"]');
-    var drfBtn = modalBody.querySelector('[data-bh="draft"]');
-    pubBtn.addEventListener("click", function () { sw.checked = true; });
-    drfBtn.addEventListener("click", function () { sw.checked = false; });
+    modalBody.querySelector('[data-bh="publish"]').addEventListener("click", function () { sw.checked = true; saveFlow(true); });
+    modalBody.querySelector('[data-bh="draft"]').addEventListener("click", function () { sw.checked = false; saveFlow(false); });
+    modalBody.querySelector('[data-bh="cancel"]').addEventListener("click", closeOverlay);
     openOverlay();
   }
 
@@ -412,7 +487,7 @@
   btnSave.addEventListener("click", function () { saveFlow(true); });
   btnDraft.addEventListener("click", function () { saveFlow(false); });
 
-  /* ---------------- image uploader ---------------- */
+  /* ---------------- image uploader (imgbb) ---------------- */
   function wireUploader(box) {
     var fileInput = box.querySelector('input[type="file"]');
     var urlInput = box.querySelector("input.url");
@@ -442,7 +517,7 @@
         urlInput.value = url;
         showPreview(url);
         try { box.dispatchEvent(new Event("preview-update", { bubbles: true })); } catch (e) {}
-        toast("تم رفع الصورة");
+        toast("تم رفع الصورة إلى imgbb");
       }).catch(function (err) {
         var m = err.message || String(err);
         if (m === "IMGBB_NOT_CONFIGURED") m = "مفتاح imgbb غير مُعد في cms-config.js";
@@ -452,6 +527,36 @@
         fileInput.value = "";
       });
     });
+  }
+
+  /* ---------------- delete confirm ---------------- */
+  function openConfirm(table, row) {
+    var cfg = TABLES[table];
+    state.editing = { table: table, id: row.id, del: true };
+    setFoot("confirm");
+    modalTitle.textContent = "حذف " + cfg.singular;
+    modalBody.innerHTML = '<p>سيتم حذف «' + esc(row[cfg.titleKey] || "") + "» نهائياً من الموقع. هل أنت متأكد؟</p>";
+    var foot = document.querySelector(".modal-foot");
+    var old = $("#modal-del-yes");
+    if (old) old.remove();
+    var yes = document.createElement("button");
+    yes.id = "modal-del-yes";
+    yes.className = "btn btn-danger";
+    yes.textContent = "حذف نهائي";
+    yes.addEventListener("click", function () {
+      yes.disabled = true;
+      api().deleteRow(table, row.id).then(function () {
+        toast("تم الحذف");
+        closeOverlay();
+        loadTable(table);
+      }).catch(function (err) {
+        modalErr.textContent = "فشل الحذف: " + (err.message || err);
+        modalErr.style.display = "block";
+        yes.disabled = false;
+      });
+    });
+    foot.insertBefore(yes, btnCancel);
+    openOverlay();
   }
 
   /* ---------------- site settings ---------------- */
@@ -465,7 +570,7 @@
         var el = document.getElementById(SET_IDS[k]);
         if (el && s[k] != null) el.value = s[k];
       });
-    }).catch(function () { /* optional section; silent */ });
+    }).catch(function () {});
   }
 
   function wireSettings() {
@@ -490,43 +595,6 @@
         err.style.display = "block";
       }).finally(function () { btn.disabled = false; });
     });
-  }
-
-  /* ---------------- delete confirm ---------------- */
-  function openConfirm(table, row) {
-    var cfg = TABLES[table];
-    state.editing = { table: table, id: row.id, del: true };
-    setFoot("confirm");
-    // reuse foot: hide save/draft, inject confirm buttons
-    modalTitle.textContent = "حذف " + cfg.singular;
-    modalBody.innerHTML = '<p>سيتم حذف «' + esc(row[cfg.titleKey] || "") + "» نهائياً من الموقع. هل أنت متأكد؟</p>";
-    var foot = document.querySelector(".modal-foot");
-    var old = $("#modal-del-yes");
-    if (old) old.remove();
-    var yes = document.createElement("button");
-    yes.id = "modal-del-yes";
-    yes.className = "btn btn-danger";
-    yes.textContent = "حذف نهائي";
-    yes.addEventListener("click", function () {
-      yes.disabled = true;
-      api().deleteRow(table, row.id).then(function () {
-        toast("تم الحذف");
-        closeOverlay();
-        yes.remove();
-        loadTable(table);
-      }).catch(function (err) {
-        modalErr.textContent = "فشل الحذف: " + (err.message || err);
-        modalErr.style.display = "block";
-        yes.disabled = false;
-      });
-    });
-    foot.insertBefore(yes, btnCancel);
-    // when closing, cleanup is handled next open; ensure removal on close:
-    var obs = new MutationObserver(function () {
-      if (!overlay.classList.contains("open")) { var y = $("#modal-del-yes"); if (y) y.remove(); obs.disconnect(); }
-    });
-    obs.observe(overlay, { attributes: true, attributeFilter: ["class"] });
-    openOverlay();
   }
 
   /* ---------------- boot ---------------- */
