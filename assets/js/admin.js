@@ -316,12 +316,12 @@
   function setFoot(mode) {
     var beh = (mode === "behance");
     document.querySelector(".modal").classList.toggle("wide", beh);
-    document.querySelector(".modal-foot").style.display = beh ? "none" : "";
+    $("#modal-foot").style.display = beh ? "none" : "";
     btnSave.style.display = mode === "form" ? "" : "none";
     btnDraft.style.display = mode === "form" ? "" : "none";
     if (mode === "confirm") {
       document.querySelector(".modal").classList.remove("wide");
-      document.querySelector(".modal-foot").style.display = "";
+      $("#modal-foot").style.display = "";
     }
   }
 
@@ -691,7 +691,7 @@
     setFoot("confirm");
     modalTitle.textContent = "حذف " + cfg.singular;
     modalBody.innerHTML = '<p>سيتم حذف «' + esc(row[cfg.titleKey] || "") + "» نهائياً من الموقع. هل أنت متأكد؟</p>";
-    var foot = document.querySelector(".modal-foot");
+    var foot = $("#modal-foot");
     var old = $("#modal-del-yes");
     if (old) old.remove();
     var yes = document.createElement("button");
