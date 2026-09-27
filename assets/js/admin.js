@@ -597,9 +597,47 @@
       closeOverlay();
       loadTable(ed.table);
     }).catch(function (err) {
-      modalErr.textContent = "فشل الحفظ: " + (err.message || err);
+      var m = String((err && err.message) || err || "");
+      var isDup = /duplicate|unique constraint|already exists/i.test(m);
+      if (isDup && !ed.id && ed.table === "projects" && c.data.slug) {
+        tryRecoverDuplicate(c.data.slug);
+        return;
+      }
+      modalErr.textContent = friendlyError(m);
       modalErr.style.display = "block";
     }).finally(function () { btnSave.disabled = false; btnDraft.disabled = false; });
+  }
+
+  function friendlyError(m) {
+    if (/duplicate|unique constraint|already exists/i.test(m)) {
+      return "هذا الرابط (slug) مستخدم لمشروع آخر — اختر رابطاً مختلفاً";
+    }
+    if (/row-level security|permission|not authorized|jwt|expired/i.test(m)) {
+      return "انتهت الجلسة أو لا صلاحية — سجّل الخروج ثم سجّل الدخول مجدداً";
+    }
+    return "فشل الحفظ: " + m;
+  }
+
+  // If a NEW project collides with an existing slug (e.g. a previous
+  // attempt already created it), open that project for editing instead
+  // of dead-ending the user.
+  function tryRecoverDuplicate(slug) {
+    function dupMsg() {
+      modalErr.textContent = "هذا الرابط (slug) مستخدم لمشروع آخر — اختر رابطاً مختلفاً";
+      modalErr.style.display = "block";
+    }
+    api().getBySlug("projects", slug).then(function (found) {
+      if (!found || !found.id || !state.editing) { dupMsg(); return; }
+      state.editing.id = found.id;
+      modalErr.textContent = "يوجد مشروع بنفس الرابط — فتحناه لك للتعديل. اضغط حفظ مجدداً للنشر.";
+      modalErr.style.display = "block";
+      api().listImages(found.id).then(function (rows) {
+        if (!state.editing) return;
+        state.editing.gallery = rows.map(function (r) { return r.image_url; });
+        state.editing.galleryDirty = false;
+        renderGallery();
+      }).catch(function () {});
+    }).catch(function () { dupMsg(); });
   }
   btnSave.addEventListener("click", function () { saveFlow(true); });
   btnDraft.addEventListener("click", function () { saveFlow(false); });

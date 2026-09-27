@@ -70,6 +70,15 @@
     });
   }
 
+  function getBySlug(table, slug) {
+    return requireSession().then(function () {
+      return client.from(table).select("*").eq("slug", slug).maybeSingle();
+    }).then(function (res) {
+      if (res.error) throw res.error;
+      return res.data || null;
+    });
+  }
+
   // ---- project gallery (project_images) ----
   function listImages(projectId) {
     return requireSession().then(function () {
@@ -209,6 +218,7 @@
     listAll: listAll,
     upsertRow: upsertRow,
     deleteRow: deleteRow,
+    getBySlug: getBySlug,
     getSettings: getSettings,
     saveSettings: saveSettings,
     listImages: listImages,
