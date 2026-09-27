@@ -368,6 +368,41 @@ textarea.input.tall { min-height: 180px; }
 .hidden { display: none !important; }
 .loading-line { text-align: center; color: var(--rzg-muted); padding: 30px; grid-column: 1 / -1; }
 
+/* ---------- toolbar (search + filter) ---------- */
+.toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
+.toolbar .input[type="search"] { flex: 1; }
+.toolbar select.input { width: auto; flex: none; min-width: 130px; }
+
+/* ---------- gallery editor ---------- */
+.gal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+.gal-empty {
+  border: 1.5px dashed var(--rzg-border);
+  border-radius: 14px;
+  padding: 18px;
+  text-align: center;
+  color: var(--rzg-faint);
+  font-size: 14px;
+  background: #fafafa;
+}
+.gal-item { position: relative; border: 1px solid var(--rzg-border); border-radius: 12px; overflow: hidden; background: #f0f0f0; }
+.gal-item img { display: block; width: 100%; height: 96px; object-fit: cover; }
+.gal-x {
+  position: absolute; top: 4px; left: 4px;
+  width: 26px; height: 26px; border-radius: 100%;
+  border: 0; background: rgba(26,26,26,.75); color: #fff;
+  font-size: 16px; line-height: 1; cursor: pointer;
+}
+.gal-move { position: absolute; bottom: 4px; right: 4px; display: flex; gap: 4px; }
+.gal-move button {
+  width: 26px; height: 26px; border-radius: 8px; border: 0;
+  background: rgba(255,255,255,.92); cursor: pointer; font-size: 12px;
+}
+.gal-n {
+  position: absolute; bottom: 4px; left: 4px;
+  background: rgba(26,26,26,.75); color: #fff;
+  font-size: 11px; border-radius: 1000px; padding: 0 8px;
+}
+
 /* ================= responsive ================= */
 @media (max-width: 1020px) {
   .stats { grid-template-columns: repeat(2, 1fr); }

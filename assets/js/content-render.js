@@ -758,6 +758,114 @@
     });
   }
 
+  /* ---------- project gallery lightbox ------------------------------------
+   * Cards keep their exact look and links. If a project has gallery
+   * images (cover + extras from Supabase), clicking its card opens a
+   * lightbox instead of navigating. Delegated on the grid so it
+   * survives re-renders.
+   */
+  var galData = {}; // slug -> { title, urls[] }
+
+  function buildGalleryMap(projects, images) {
+    galData = {};
+    var byId = {};
+    (projects || []).forEach(function (p) { byId[p.id] = p; });
+    (images || []).forEach(function (im) {
+      var p = byId[im.project_id];
+      if (!p || !p.slug) return;
+      if (!galData[p.slug]) galData[p.slug] = { title: p.title || "", urls: p.image_url ? [p.image_url] : [] };
+      if (im.image_url && galData[p.slug].urls.indexOf(im.image_url) < 0) {
+        galData[p.slug].urls.push(im.image_url);
+      }
+    });
+  }
+
+  var lbEl = null, lbUrls = [], lbIdx = 0, lbTitle = "";
+
+  function lbShow(i) {
+    if (!lbUrls.length || !lbEl) return;
+    lbIdx = ((i % lbUrls.length) + lbUrls.length) % lbUrls.length;
+    var img = lbEl.querySelector(".rzg-lb-fig img");
+    if (img) { img.src = lbUrls[lbIdx]; img.alt = lbTitle; }
+    var cap = lbEl.querySelector(".rzg-lb-fig figcaption");
+    if (cap) cap.textContent = lbTitle;
+    var cnt = lbEl.querySelector(".rzg-lb-count");
+    if (cnt) cnt.textContent = (lbIdx + 1) + " / " + lbUrls.length;
+    var ths = lbEl.querySelectorAll(".rzg-lb-thumbs img");
+    for (var t = 0; t < ths.length; t++) {
+      if (ths[t].classList) ths[t].classList.toggle("on", t === lbIdx);
+    }
+  }
+
+  function lbKeys(e) {
+    if (!lbEl) return;
+    if (e.key === "Escape") closeLightbox();
+    else if (e.key === "ArrowLeft") lbShow(lbIdx + 1);
+    else if (e.key === "ArrowRight") lbShow(lbIdx - 1);
+  }
+
+  function closeLightbox() {
+    if (lbEl && lbEl.parentNode) lbEl.parentNode.removeChild(lbEl);
+    lbEl = null;
+    document.removeEventListener("keydown", lbKeys);
+  }
+
+  function openLightbox(entry) {
+    closeLightbox();
+    lbUrls = entry.urls;
+    lbTitle = entry.title || "";
+    lbEl = document.createElement("div");
+    lbEl.className = "rzg-lightbox";
+    var thumbs = "";
+    if (lbUrls.length > 1) {
+      thumbs = '<div class="rzg-lb-thumbs">';
+      for (var i = 0; i < lbUrls.length; i++) {
+        thumbs += '<img src="' + lbUrls[i] + '" alt="" data-ti="' + i + '">';
+      }
+      thumbs += "</div>";
+    }
+    lbEl.innerHTML = '<div class="rzg-lb-backdrop"></div>' +
+      '<button type="button" class="rzg-lb-x" aria-label="close">×</button>' +
+      '<button type="button" class="rzg-lb-prev" aria-label="prev">‹</button>' +
+      '<figure class="rzg-lb-fig"><img alt=""><figcaption></figcaption></figure>' +
+      '<button type="button" class="rzg-lb-next" aria-label="next">›</button>' +
+      '<div class="rzg-lb-count"></div>' + thumbs;
+    document.body.appendChild(lbEl);
+    lbEl.querySelector(".rzg-lb-backdrop").addEventListener("click", closeLightbox);
+    lbEl.querySelector(".rzg-lb-x").addEventListener("click", closeLightbox);
+    lbEl.querySelector(".rzg-lb-prev").addEventListener("click", function () { lbShow(lbIdx - 1); });
+    lbEl.querySelector(".rzg-lb-next").addEventListener("click", function () { lbShow(lbIdx + 1); });
+    var timgs = lbEl.querySelectorAll(".rzg-lb-thumbs img");
+    for (var k = 0; k < timgs.length; k++) {
+      (function (idx) {
+        timgs[idx].addEventListener("click", function () { lbShow(idx); });
+      })(k);
+    }
+    document.addEventListener("keydown", lbKeys);
+    lbShow(0);
+  }
+
+  function wireGallery() {
+    // Delegate on document (not the grid node): React may replace the
+    // whole grid subtree during hydration, orphaning node-level listeners.
+    if (document.documentElement.getAttribute("data-cms-gal")) return;
+    document.documentElement.setAttribute("data-cms-gal", "1");
+    document.addEventListener("click", function (ev) {
+      var tgt = ev.target;
+      var a = (tgt && tgt.closest) ? tgt.closest('a[href*="./projects/"]') : null;
+      if (!a) return;
+      var grid = document.querySelector('[data-framer-name="Projects Grid"]');
+      if (!grid || !grid.contains(a)) return;
+      var m = /\.\/projects\/([A-Za-z0-9-]+)/.exec(a.getAttribute("href") || "");
+      if (!m) return;
+      var entry = galData[m[1]];
+      if (!entry || !entry.urls.length) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      openLightbox(entry);
+    }, true);
+  }
+
   /* ---------- orchestration ---------------------------------------------- */
   var state = { projects: null, testimonials: null, posts: null, settings: null, applies: 0 };
 
@@ -819,9 +927,10 @@
 
   function boot() {
     // Brand lock runs immediately and does NOT wait for the network.
-    try { applyBrand(); } catch (e) { }
+    try { applyBrand(); } catch (e) {}
+    wireGallery();
     window.addEventListener("load", function () {
-      setTimeout(function () { try { applyBrand(); } catch (e) { } brandGuard(); }, 900);
+      setTimeout(function () { try { applyBrand(); } catch (e) {} brandGuard(); }, 900);
     });
     brandGuard();
     if (!window.RZG_CMS || !window.RZG_CMS.configured) return; // fallback: Framer content
@@ -829,9 +938,11 @@
       window.RZG_CMS.listPublished("projects"),
       window.RZG_CMS.listPublished("testimonials"),
       window.RZG_CMS.listPublished("posts"),
-      window.RZG_CMS.getSettings()
+      window.RZG_CMS.getSettings(),
+      window.RZG_CMS.listPublishedImages()
     ]).then(function (r) {
       state.projects = r[0]; state.testimonials = r[1]; state.posts = r[2]; state.settings = r[3];
+      buildGalleryMap(r[0], r[4]);
       paint();
       guard();
       window.addEventListener("load", function () { setTimeout(function () { paint(); guard(); }, 900); });

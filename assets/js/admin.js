@@ -57,38 +57,22 @@
         { key: "sort", label: "الترتيب (الأصغر أولاً)", type: "number" }
       ]
     },
-    posts: {
-      title: "المدونة",
-      singular: "مقال",
-      thumbKey: "cover_url",
-      thumbRound: false,
-      titleKey: "title",
-      subKey: "excerpt",
-      fields: [
-        { key: "title", label: "عنوان المقال", type: "text", required: true },
-        { key: "slug", label: "الرابط (slug)", type: "text", required: true, ltr: true,
-          hint: "أحرف إنجليزية صغيرة وأرقام وشرطات فقط — يظهر في ./blog/xxx" },
-        { key: "excerpt", label: "الملخص (يظهر في البطاقة)", type: "textarea", required: true },
-        { key: "body", label: "نص المقال الكامل", type: "tall", required: true },
-        { key: "cover_url", label: "صورة الغلاف", type: "image", required: true },
-        { key: "date_label", label: "التاريخ المعروض (مثال: مارس 2025)", type: "text", required: true },
-        { key: "published_at", label: "تاريخ النشر (للترتيب)", type: "date" },
-        { key: "sort", label: "الترتيب (الأصغر أولاً)", type: "number" }
-      ]
-    }
   };
 
   var VIEWS = {
     dashboard: "لوحة القيادة",
     projects: "المشاريع",
     testimonials: "آراء العملاء",
-    posts: "المدونة",
     settings: "إعدادات الموقع"
   };
 
   var state = {
     view: "dashboard",
-    rows: { projects: [], testimonials: [], posts: [] },
+    rows: { projects: [], testimonials: [] },
+    filter: {
+      projects: { q: "", pub: "all" },
+      testimonials: { q: "", pub: "all" }
+    },
     editing: null
   };
 
@@ -170,7 +154,15 @@
     });
     var mb = $("#menu-btn");
     if (mb) mb.addEventListener("click", function () { document.body.classList.toggle("nav-open"); });
+    wireToolbar("projects");
+    wireToolbar("testimonials");
     wireSettings();
+  }
+
+  function wireToolbar(table) {
+    var s = $("#search-" + table), f = $("#filter-" + table);
+    if (s) s.addEventListener("input", function () { state.filter[table].q = s.value; renderList(table); });
+    if (f) f.addEventListener("change", function () { state.filter[table].pub = f.value; renderList(table); });
   }
 
   function switchView(v) {
@@ -179,7 +171,7 @@
     document.querySelectorAll(".side-link[data-view]").forEach(function (x) {
       x.classList.toggle("active", x.getAttribute("data-view") === v);
     });
-    ["dashboard", "projects", "testimonials", "posts", "settings"].forEach(function (k) {
+    ["dashboard", "projects", "testimonials", "settings"].forEach(function (k) {
       $("#view-" + k).classList.toggle("hidden", k !== v);
     });
     $("#page-title").textContent = VIEWS[v];
@@ -190,7 +182,10 @@
 
   /* ---------------- lists ---------------- */
   function loadAll() {
-    ["projects", "testimonials", "posts"].forEach(loadTable);
+    ["projects", "testimonials"].forEach(loadTable);
+    api().countAllImages().then(function (n) {
+      $("#stat-gallery").textContent = n;
+    });
     if (!api().configReady) {
       var w = $("#cfg-warn");
       w.textContent = "ملف الإعداد غير مكتمل — راجع docs/CMS-SETUP.md";
@@ -214,12 +209,28 @@
     return row.is_published ? '<span class="badge pub">منشور</span>' : '<span class="badge draft">مسودة</span>';
   }
 
+  function visibleRows(table) {
+    var cfg = TABLES[table];
+    var f = state.filter[table];
+    return state.rows[table].filter(function (row) {
+      if (f.pub === "pub" && !row.is_published) return false;
+      if (f.pub === "draft" && row.is_published) return false;
+      if (f.q) {
+        var hay = ((row[cfg.titleKey] || "") + " " + (row[cfg.subKey] || "")).toLowerCase();
+        if (hay.indexOf(f.q.toLowerCase()) < 0) return false;
+      }
+      return true;
+    });
+  }
+
   function renderList(table) {
     var cfg = TABLES[table];
     var list = $("#list-" + table);
-    var rows = state.rows[table];
+    var rows = visibleRows(table);
     if (!rows.length) {
-      list.innerHTML = '<div class="empty">لا عناصر بعد — اضغط زر الإضافة بالأعلى</div>';
+      list.innerHTML = state.rows[table].length
+        ? '<div class="empty">لا نتائج مطابقة للبحث</div>'
+        : '<div class="empty">لا عناصر بعد — اضغط زر الإضافة بالأعلى</div>';
       return;
     }
     list.innerHTML = "";
@@ -258,16 +269,14 @@
 
   /* ---------------- dashboard home ---------------- */
   function renderDashboard() {
-    var pr = state.rows.projects, ts = state.rows.testimonials, ps = state.rows.posts;
+    var pr = state.rows.projects, ts = state.rows.testimonials;
     var pub = pr.filter(function (r) { return r.is_published; }).length;
     $("#stat-pub").textContent = pub;
     $("#stat-draft").textContent = pr.length - pub;
     $("#stat-tst").textContent = ts.length;
-    $("#stat-post").textContent = ps.length;
-    var cp = $("#count-projects"), ct = $("#count-testimonials"), cpo = $("#count-posts");
+    var cp = $("#count-projects"), ct = $("#count-testimonials");
     if (cp) cp.textContent = pr.length;
     if (ct) ct.textContent = ts.length;
-    if (cpo) cpo.textContent = ps.length;
     miniList($("#recent-projects"), pr.slice(0, 3), TABLES.projects, "projects");
     miniList($("#recent-testimonials"), ts.slice(0, 3), TABLES.testimonials, "testimonials");
   }
@@ -368,9 +377,9 @@
     openOverlay();
   }
 
-  /* ---- Behance-style project editor ---- */
+  /* ---- Behance-style project editor (+ gallery) ---- */
   function openProjectForm(row) {
-    state.editing = { table: "projects", id: row ? row.id : null };
+    state.editing = { table: "projects", id: row ? row.id : null, gallery: [] };
     setFoot("behance");
     modalTitle.textContent = row ? "تحرير المشروع" : "انشر مشروعاً جديداً";
     var r = row || {};
@@ -392,6 +401,14 @@
         '<div class="txt"><div class="t"></div><div class="c"></div></div></div>' +
       '<div class="field" style="margin-top:16px"><label>السطر التعريفي *</label>' +
         '<textarea class="input" data-key="caption" placeholder="مثال: استراتيجية علامة وتجربة رقمية">' + esc(r.caption || "") + "</textarea></div>" +
+      '<div class="field"><label>معرض الصور <span style="color:#a3a3a3">(اختياري — يفتح عند الضغط على البطاقة في الموقع)</span></label>' +
+        '<div class="gal-grid" id="gal-grid"></div>' +
+        '<div style="display:flex;gap:8px;align-items:center;margin-top:10px">' +
+          '<button type="button" class="btn btn-secondary btn-small" id="gal-add">+ إضافة صور</button>' +
+          '<input type="file" id="gal-file" accept="image/*" multiple style="display:none">' +
+          '<div class="progress" id="gal-prog" style="flex:1;margin-top:0"><div></div></div>' +
+        "</div>" +
+        '<div class="hint">تُرفع إلى imgbb تلقائياً — رتّب بالأسهم واحذف بـ ×</div></div>' +
       '<div class="bh-grid">' +
         '<div class="field"><label>الرابط (slug) *</label>' +
           '<input class="input" dir="ltr" data-key="slug" value="' + esc(r.slug || "") + '" placeholder="project-name">' +
@@ -409,6 +426,7 @@
 
     var box = modalBody.querySelector("[data-uploader]");
     wireUploader(box);
+    wireGallery(row ? row.id : null);
 
     function refreshPreview() {
       var ti = modalBody.querySelector('[data-key="title"]');
@@ -440,6 +458,85 @@
     modalBody.querySelector('[data-bh="draft"]').addEventListener("click", function () { sw.checked = false; saveFlow(false); });
     modalBody.querySelector('[data-bh="cancel"]').addEventListener("click", closeOverlay);
     openOverlay();
+  }
+
+  /* ---- project gallery (multi-upload to imgbb, orderable) ---- */
+  function renderGallery() {
+    var grid = modalBody.querySelector("#gal-grid");
+    if (!grid || !state.editing) return;
+    var gal = state.editing.gallery || [];
+    grid.innerHTML = "";
+    if (!gal.length) {
+      grid.innerHTML = '<div class="gal-empty">لا صور إضافية — الغلاف وحده يكفي، أو أضف صوراً للمعرض</div>';
+      return;
+    }
+    gal.forEach(function (url, i) {
+      var d = document.createElement("div");
+      d.className = "gal-item";
+      d.innerHTML = '<img src="' + esc(url) + '" alt="" loading="lazy">' +
+        '<button type="button" class="gal-x" title="حذف">×</button>' +
+        '<div class="gal-move"><button type="button" data-mv="-1" title="قبل">◀</button>' +
+        '<button type="button" data-mv="1" title="بعد">▶</button></div>' +
+        '<span class="gal-n">' + (i + 1) + "</span>";
+      d.querySelector(".gal-x").addEventListener("click", function () {
+        state.editing.gallery.splice(i, 1);
+        renderGallery();
+      });
+      d.querySelectorAll("[data-mv]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var g = state.editing.gallery;
+          var j = i + Number(b.getAttribute("data-mv"));
+          if (j < 0 || j >= g.length) return;
+          var tmp = g[i]; g[i] = g[j]; g[j] = tmp;
+          renderGallery();
+        });
+      });
+      grid.appendChild(d);
+    });
+  }
+
+  function wireGallery(projectId) {
+    renderGallery();
+    if (projectId) {
+      api().listImages(projectId).then(function (rows) {
+        if (!state.editing) return;
+        state.editing.gallery = rows.map(function (r) { return r.image_url; });
+        renderGallery();
+      }).catch(function () {});
+    }
+    var add = modalBody.querySelector("#gal-add");
+    var file = modalBody.querySelector("#gal-file");
+    var bar = modalBody.querySelector("#gal-prog");
+    var fill = bar.querySelector("div");
+    add.addEventListener("click", function () { file.click(); });
+    file.addEventListener("change", function () {
+      var files = Array.prototype.slice.call(file.files || []);
+      if (!files.length || !state.editing) return;
+      bar.style.display = "block";
+      var done = 0;
+      function next(k) {
+        if (k >= files.length || !state.editing) {
+          bar.style.display = "none";
+          file.value = "";
+          return;
+        }
+        api().uploadImage(files[k], function (p) {
+          fill.style.width = Math.round(((done + p / 100) / files.length) * 100) + "%";
+        }).then(function (url) {
+          done++;
+          state.editing.gallery.push(url);
+          renderGallery();
+          toast("تم رفع صورة " + done + " من " + files.length);
+          next(k + 1);
+        }).catch(function (err) {
+          var m = err.message || String(err);
+          if (m === "IMGBB_NOT_CONFIGURED") m = "مفتاح imgbb غير مُعد في cms-config.js";
+          toast("فشل رفع صورة: " + m, true);
+          next(k + 1);
+        });
+      }
+      next(0);
+    });
   }
 
   function collectForm(table) {
@@ -474,8 +571,14 @@
     if (publish === true) c.data.is_published = true;
     if (publish === false) c.data.is_published = false;
     if (ed.id) c.data.id = ed.id;
+    var galUrls = (ed.table === "projects" && ed.gallery) ? ed.gallery.slice() : null;
     btnSave.disabled = true; btnDraft.disabled = true;
-    api().upsertRow(ed.table, c.data).then(function () {
+    api().upsertRow(ed.table, c.data).then(function (saved) {
+      if (galUrls !== null) {
+        return api().replaceImages(saved.id, galUrls).then(function () { return saved; });
+      }
+      return saved;
+    }).then(function () {
       toast(publish === false ? "حُفظ كمسودة" : "تم الحفظ والنشر");
       closeOverlay();
       loadTable(ed.table);

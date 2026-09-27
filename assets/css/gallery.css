@@ -1,0 +1,112 @@
+/* ============================================================================
+ * Gallery lightbox — same design language as the site.
+ * Fixed dark overlay, pill counter, round arrow buttons (RTL-aware via
+ * logical properties), thumbnail strip. Only used when a project card
+ * has gallery images; otherwise cards behave exactly as before.
+ * ============================================================================ */
+.rzg-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  direction: rtl;
+}
+.rzg-lb-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 16, 16, 0.88);
+  backdrop-filter: blur(6px);
+}
+.rzg-lb-fig {
+  position: relative;
+  margin: 0;
+  max-width: min(92vw, 1100px);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.rzg-lb-fig img {
+  max-width: 100%;
+  max-height: 74vh;
+  border-radius: 20px;
+  object-fit: contain;
+  background: #000;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.rzg-lb-fig figcaption {
+  color: #fff;
+  font-family: "thmanyah sans Medium", sans-serif;
+  margin-top: 12px;
+  font-size: 16px;
+}
+.rzg-lb-x,
+.rzg-lb-prev,
+.rzg-lb-next {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.95);
+  color: #1a1a1a;
+  cursor: pointer;
+  border-radius: 1000px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.rzg-lb-x {
+  top: 22px;
+  inset-inline-end: 22px;
+  width: 46px;
+  height: 46px;
+  font-size: 24px;
+  line-height: 1;
+}
+.rzg-lb-prev,
+.rzg-lb-next {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 52px;
+  height: 52px;
+  font-size: 30px;
+  line-height: 1;
+}
+.rzg-lb-prev { inset-inline-start: 18px; }
+.rzg-lb-next { inset-inline-end: 18px; }
+.rzg-lb-count {
+  position: absolute;
+  bottom: 22px;
+  inset-inline-start: 50%;
+  transform: translateX(50%);
+  background: rgba(255, 255, 255, 0.95);
+  color: #1a1a1a;
+  border-radius: 1000px;
+  padding: 4px 18px;
+  font-size: 14px;
+}
+[dir="ltr"] .rzg-lb-count { transform: translateX(-50%); }
+.rzg-lb-thumbs {
+  position: absolute;
+  bottom: 64px;
+  display: flex;
+  gap: 8px;
+  max-width: 90vw;
+  overflow-x: auto;
+  padding: 4px;
+}
+.rzg-lb-thumbs img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 12px;
+  cursor: pointer;
+  opacity: 0.55;
+  border: 2px solid transparent;
+}
+.rzg-lb-thumbs img.on { opacity: 1; border-color: #fff; }
+@media (max-width: 640px) {
+  .rzg-lb-prev, .rzg-lb-next { width: 42px; height: 42px; }
+  .rzg-lb-thumbs { display: none; }
+}

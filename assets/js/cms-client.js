@@ -70,7 +70,50 @@
     });
   }
 
-  // ---- imgbb ----
+  // ---- project gallery (project_images) ----
+  function listImages(projectId) {
+    return requireSession().then(function () {
+      return client.from("project_images").select("*").eq("project_id", projectId).order("sort", { ascending: true });
+    }).then(function (res) {
+      if (res.error) throw res.error;
+      return res.data || [];
+    });
+  }
+
+  function listPublishedImages() {
+    if (!client) return Promise.resolve(null);
+    return client.from("project_images").select("*").order("sort", { ascending: true })
+      .then(function (res) {
+        if (res.error) throw res.error;
+        return res.data || [];
+      })
+      .catch(function () { return null; });
+  }
+
+  function replaceImages(projectId, urls) {
+    return requireSession().then(function () {
+      return client.from("project_images").delete().eq("project_id", projectId);
+    }).then(function (res) {
+      if (res.error) throw res.error;
+      if (!urls || !urls.length) return [];
+      var rows = urls.map(function (u, i) {
+        return { project_id: projectId, image_url: u, sort: i };
+      });
+      return client.from("project_images").insert(rows).select();
+    }).then(function (res) {
+      if (res.error) throw res.error;
+      return res.data || [];
+    });
+  }
+
+  function countAllImages() {
+    return requireSession().then(function () {
+      return client.from("project_images").select("id", { count: "exact", head: true });
+    }).then(function (res) {
+      if (res.error) throw res.error;
+      return res.count || 0;
+    }).catch(function () { return 0; });
+  }
   function imgbbKey() {
     var k = cfg.IMGBB_API_KEY || "";
     if (!k || String(k).indexOf("PASTE_") === 0) throw new Error("IMGBB_NOT_CONFIGURED");
@@ -168,6 +211,10 @@
     deleteRow: deleteRow,
     getSettings: getSettings,
     saveSettings: saveSettings,
+    listImages: listImages,
+    listPublishedImages: listPublishedImages,
+    replaceImages: replaceImages,
+    countAllImages: countAllImages,
     uploadImage: uploadImage
   };
 })();
