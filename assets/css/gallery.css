@@ -110,3 +110,62 @@
   .rzg-lb-prev, .rzg-lb-next { width: 42px; height: 42px; }
   .rzg-lb-thumbs { display: none; }
 }
+
+/* ============================================================================
+ * Project detail view (built from Supabase for dashboard-published projects)
+ * Same language: page bg, white cards, radius 20, Thmanyah.
+ * ============================================================================ */
+.rzg-project {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 90px 20px 90px;
+}
+.rzg-pg-inner { display: flex; flex-direction: column; align-items: stretch; }
+.rzg-pg-back {
+  align-self: flex-start;
+  font: inherit;
+  border-radius: 1000px;
+  padding: 10px 24px;
+  cursor: pointer;
+  color: #1a1a1a;
+  background: linear-gradient(180deg, #fff 0%, #f4f4f4 100%);
+  border: 1px solid #dedede;
+  box-shadow: 0 6px 12px rgba(26,26,26,.08), inset 0 4px 6px rgba(255,255,255,.35);
+  margin-bottom: 26px;
+}
+.rzg-project h1 {
+  font-family: "thmanyah sans Bold", "thmanyah sans Bold Placeholder", sans-serif;
+  font-size: 42px;
+  margin: 0 0 6px;
+  color: #1a1a1a;
+}
+.rzg-pg-cap {
+  color: #545454;
+  font-size: 18px;
+  margin: 0 0 26px;
+}
+.rzg-pg-hero {
+  width: 100%;
+  border-radius: 20px;
+  object-fit: cover;
+  border: 1px solid #dedede;
+}
+.rzg-pg-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+.rzg-pg-grid img {
+  width: 100%;
+  border-radius: 20px;
+  object-fit: cover;
+  cursor: zoom-in;
+  border: 1px solid #dedede;
+  background: #fff;
+}
+@media (max-width: 700px) {
+  .rzg-project { padding: 70px 14px 60px; }
+  .rzg-project h1 { font-size: 30px; }
+  .rzg-pg-grid { grid-template-columns: 1fr; }
+}

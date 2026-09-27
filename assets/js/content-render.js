@@ -773,7 +773,13 @@
     (images || []).forEach(function (im) {
       var p = byId[im.project_id];
       if (!p || !p.slug) return;
-      if (!galData[p.slug]) galData[p.slug] = { title: p.title || "", urls: p.image_url ? [p.image_url] : [] };
+      if (!galData[p.slug]) {
+        galData[p.slug] = {
+          title: p.title || "",
+          caption: p.caption || "",
+          urls: p.image_url ? [p.image_url] : []
+        };
+      }
       if (im.image_url && galData[p.slug].urls.indexOf(im.image_url) < 0) {
         galData[p.slug].urls.push(im.image_url);
       }
@@ -846,12 +852,28 @@
   }
 
   function wireGallery() {
-    // Delegate on document (not the grid node): React may replace the
-    // whole grid subtree during hydration, orphaning node-level listeners.
+    // Card clicks for OUR published projects navigate to our detail view
+    // (rendered below from Supabase). Other cards keep Framer behavior.
+    // Delegated on document: survives grid re-renders. Capture phase wins
+    // over Framer's own handlers.
     if (document.documentElement.getAttribute("data-cms-gal")) return;
     document.documentElement.setAttribute("data-cms-gal", "1");
     document.addEventListener("click", function (ev) {
       var tgt = ev.target;
+      // gallery images inside our detail view -> lightbox
+      var gimg = (tgt && tgt.closest) ? tgt.closest(".rzg-project .rzg-pg-grid img") : null;
+      if (gimg) {
+        var all = Array.prototype.slice.call(
+          (gimg.closest(".rzg-project") || document).querySelectorAll(".rzg-pg-grid img"));
+        var urls = all.map(function (im) { return im.src; });
+        var idx = all.indexOf(gimg);
+        var cap = document.querySelector(".rzg-project h1");
+        ev.preventDefault();
+        ev.stopPropagation();
+        openLightbox({ title: cap ? cap.textContent : "", urls: urls.length ? urls : [gimg.src] });
+        if (idx > 0) lbShow(idx);
+        return;
+      }
       var a = (tgt && tgt.closest) ? tgt.closest('a[href*="./projects/"]') : null;
       if (!a) return;
       var grid = document.querySelector('[data-framer-name="Projects Grid"]');
@@ -859,12 +881,110 @@
       var m = /\.\/projects\/([A-Za-z0-9-]+)/.exec(a.getAttribute("href") || "");
       if (!m) return;
       var entry = galData[m[1]];
-      if (!entry || !entry.urls.length) return;
+      if (!entry) return; // unknown slug -> Framer handles it
       ev.preventDefault();
       ev.stopPropagation();
-      openLightbox(entry);
+      goProject(m[1]);
     }, true);
   }
+
+  /* ---------- project detail pages (Supabase) -----------------------------
+   * Cards of OUR published projects open a detail view built from Supabase
+   * (cover, title, caption, gallery). Original Framer projects are untouched.
+   * Works with Framer's SPA navigation (history patch) and with direct
+   * loads via 404.html fallback on static hosts.
+   */
+  var detailSlug = null;
+  var homeTitle = document.title;
+
+  function projectSlugFromPath() {
+    var m = /\/projects\/([A-Za-z0-9-]+)\/?$/.exec(window.location.pathname);
+    return m ? m[1] : null;
+  }
+
+  function hideDetail() {
+    var d = document.querySelector(".rzg-project");
+    if (d && d.parentNode) d.parentNode.removeChild(d);
+    var main = document.getElementById("main");
+    if (main) main.style.display = "";
+    if (detailSlug !== null) {
+      detailSlug = null;
+      document.title = homeTitle;
+    }
+  }
+
+  function renderDetail(slug) {
+    var entry = galData[slug];
+    if (!entry) { hideDetail(); return; }
+    hideDetail();
+    detailSlug = slug;
+    var main = document.getElementById("main");
+    if (main) main.style.display = "none";
+    var d = document.createElement("div");
+    d.className = "rzg-project";
+    var gal = "";
+    if (entry.urls.length > 1) {
+      gal = '<div class="rzg-pg-grid">';
+      for (var i = 1; i < entry.urls.length; i++) {
+        gal += '<img src="' + entry.urls[i] + '" alt="" loading="lazy">';
+      }
+      gal += "</div>";
+    }
+    d.innerHTML =
+      '<div class="rzg-pg-inner">' +
+        '<button type="button" class="rzg-pg-back">→ عودة للمشاريع</button>' +
+        "<h1>" + escHtmlAttr(entry.title) + "</h1>" +
+        '<p class="rzg-pg-cap">' + escHtmlAttr(entry.caption || "") + "</p>" +
+        (entry.urls.length
+          ? '<img class="rzg-pg-hero" src="' + entry.urls[0] + '" alt="">'
+          : "") +
+        gal +
+      "</div>";
+    document.body.appendChild(d);
+    d.querySelector(".rzg-pg-back").addEventListener("click", function () {
+      window.location.assign("../");
+    });
+    document.title = entry.title + " | Staphium";
+    try { window.scrollTo(0, 0); } catch (e) {}
+  }
+
+  function escHtmlAttr(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function checkRoute() {
+    var slug = projectSlugFromPath();
+    if (slug && galData[slug]) {
+      if (detailSlug !== slug) renderDetail(slug);
+    } else {
+      if (detailSlug !== null) hideDetail();
+    }
+  }
+
+  function goProject(slug) {
+    try {
+      window.history.pushState({}, "", "./projects/" + slug);
+    } catch (e) {
+      window.location.assign("./projects/" + slug);
+      return;
+    }
+    setTimeout(checkRoute, 60);
+  }
+
+  var _pushState = window.history.pushState;
+  var _replaceState = window.history.replaceState;
+  window.history.pushState = function () {
+    var r = _pushState.apply(this, arguments);
+    setTimeout(checkRoute, 60);
+    return r;
+  };
+  window.history.replaceState = function () {
+    var r = _replaceState.apply(this, arguments);
+    setTimeout(checkRoute, 60);
+    return r;
+  };
+  window.addEventListener("popstate", function () { setTimeout(checkRoute, 60); });
 
   /* ---------- orchestration ---------------------------------------------- */
   var state = { projects: null, testimonials: null, posts: null, settings: null, applies: 0 };
@@ -929,8 +1049,9 @@
     // Brand lock runs immediately and does NOT wait for the network.
     try { applyBrand(); } catch (e) {}
     wireGallery();
+    checkRoute();
     window.addEventListener("load", function () {
-      setTimeout(function () { try { applyBrand(); } catch (e) {} brandGuard(); }, 900);
+      setTimeout(function () { try { applyBrand(); } catch (e) {} brandGuard(); checkRoute(); }, 900);
     });
     brandGuard();
     if (!window.RZG_CMS || !window.RZG_CMS.configured) return; // fallback: Framer content
@@ -945,7 +1066,8 @@
       buildGalleryMap(r[0], r[4]);
       paint();
       guard();
-      window.addEventListener("load", function () { setTimeout(function () { paint(); guard(); }, 900); });
+      checkRoute();
+      window.addEventListener("load", function () { setTimeout(function () { paint(); guard(); checkRoute(); }, 900); });
     }).catch(function () { /* keep Framer fallback */ });
   }
 
