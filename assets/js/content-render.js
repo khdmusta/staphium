@@ -383,6 +383,177 @@
     }
     return false;
   }
+  // Services lock: 3 categories in DOM order. Title words + service
+  // pills (Big/Sm variants grouped separately so pruned copies still map
+  // correctly). Texts only; runtime clones get visible styles.
+  var SVC_T = [
+    ["التصميم", "البصري"],
+    ["الفن", "ثلاثي", "الأبعاد"],
+    ["السرد", "والإخراج", "الفني"]
+  ];
+  var SVC_I = [
+    ["التصميم الجرافيكي", "الهوية البصرية", "التصميم الإعلاني", "تصميم الملصقات", "التكوين والإخراج البصري"],
+    ["النمذجة ثلاثية الأبعاد", "تصميم المشاهد", "الإضاءة والخامات", "الإخراج ثلاثي الأبعاد", "التحريك ثلاثي الأبعاد"],
+    ["تطوير الأفكار والمفاهيم", "السرد البصري", "بناء العوالم البصرية", "الإخراج الفني", "التوجيه البصري"]
+  ];
+
+  function svcCats() {
+    var all = document.querySelectorAll('div[data-framer-name="Category & Service Blocks"]');
+    var out = [];
+    for (var i = 0; i < all.length && i < 3; i++) out.push(all[i]);
+    return out;
+  }
+
+  function pillVariant(h5) {
+    var el = h5;
+    while (el && el !== document.body) {
+      var nm = el.getAttribute ? el.getAttribute("data-framer-name") : null;
+      if (nm === "Big" || nm === "Sm") return nm;
+      el = el.parentElement;
+    }
+    return "";
+  }
+
+  function variantWrapper(h5) {
+    var el = h5;
+    while (el && el !== document.body) {
+      var cl = el.getAttribute ? (el.getAttribute("class") || "") : "";
+      if ((" " + cl + " ").indexOf(" ssr-variant ") >= 0) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  function sanitizeDeep(root) {
+    var els = root.querySelectorAll("*");
+    for (var i = 0; i < els.length; i++) {
+      var st = els[i].getAttribute("style");
+      if (st) els[i].setAttribute("style", sanitizeAnimStyle(st));
+    }
+    var rs = root.getAttribute ? root.getAttribute("style") : null;
+    if (rs) root.setAttribute("style", sanitizeAnimStyle(rs));
+  }
+
+  function applyServices() {
+    var cats = svcCats();
+    if (!cats.length) return 0;
+    var n = 0;
+    for (var k = 0; k < cats.length; k++) {
+      var h5s = cats[k].querySelectorAll('h5[data-styles-preset="rDMpVgWRC"]');
+      var th = null, hi;
+      for (hi = 0; hi < h5s.length; hi++) {
+        if (h5s[hi].querySelector("span")) { th = h5s[hi]; break; }
+      }
+      if (th) {
+        var spans = [];
+        var all2 = th.querySelectorAll("span");
+        for (var s = 0; s < all2.length; s++) {
+          if (!all2[s].querySelector("span")) spans.push(all2[s]);
+        }
+        var want = SVC_T[k];
+        for (var w = 0; w < want.length; w++) {
+          if (spans[w]) {
+            if (spans[w].textContent !== want[w]) { spans[w].textContent = want[w]; n++; }
+          } else if (spans.length) {
+            var c = document.createElement("span");
+            c.setAttribute("style", sanitizeAnimStyle(spans[spans.length - 1].getAttribute("style")));
+            c.textContent = want[w];
+            th.appendChild(document.createTextNode(" "));
+            th.appendChild(c);
+            spans.push(c);
+            n++;
+          }
+        }
+        while (spans.length > want.length) {
+          var ex = spans.pop();
+          var prev = ex.previousSibling;
+          if (prev && prev.nodeType === 3) prev.parentNode.removeChild(prev);
+          if (ex.parentNode) ex.parentNode.removeChild(ex);
+          n++;
+        }
+      }
+      var bigs = [], sms = [];
+      var pills = cats[k].querySelectorAll('div[data-framer-name="App Design"] h5');
+      for (var q = 0; q < pills.length; q++) {
+        var v = pillVariant(pills[q]);
+        if (v === "Sm") sms.push(pills[q]);
+        else bigs.push(pills[q]);
+      }
+      if (bigs.length < 5 || sms.length < 5) return true;
+      for (var b = 0; b < bigs.length && b < SVC_I[k].length; b++) {
+        if (bigs[b].textContent !== SVC_I[k][b]) { bigs[b].textContent = SVC_I[k][b]; n++; }
+      }
+      for (var m = 0; m < sms.length && m < SVC_I[k].length; m++) {
+        if (sms[m].textContent !== SVC_I[k][m]) { sms[m].textContent = SVC_I[k][m]; n++; }
+      }
+    }
+    return n;
+  }
+
+  function servicesNeedApply() {
+    var cats = svcCats();
+    if (!cats.length) return false;
+    for (var k = 0; k < cats.length; k++) {
+      var h5s = cats[k].querySelectorAll('h5[data-styles-preset="rDMpVgWRC"]');
+      var th = null, hi;
+      for (hi = 0; hi < h5s.length; hi++) {
+        if (h5s[hi].querySelector("span")) { th = h5s[hi]; break; }
+      }
+      if (th) {
+        var spans = [];
+        var all2 = th.querySelectorAll("span");
+        for (var s = 0; s < all2.length; s++) {
+          if (!all2[s].querySelector("span")) spans.push(all2[s]);
+        }
+        if (spans.length !== SVC_T[k].length) return true;
+        for (var w = 0; w < SVC_T[k].length; w++) {
+          if (spans[w].textContent !== SVC_T[k][w]) return true;
+        }
+      }
+      var bigs = [], sms = [];
+      var pills = cats[k].querySelectorAll('div[data-framer-name="App Design"] h5');
+      for (var q = 0; q < pills.length; q++) {
+        var v = pillVariant(pills[q]);
+        if (v === "Sm") sms.push(pills[q]);
+        else bigs.push(pills[q]);
+      }
+      // grow pruned/dropped variants back to 5 (clone last wrapper, visible styles)
+      var grow = 0;
+      while ((bigs.length < 5 || sms.length < 5) && grow < 3) {
+        grow++;
+        if (bigs.length < 5 && bigs.length) {
+          var wb = variantWrapper(bigs[bigs.length - 1]);
+          if (wb && wb.parentNode) {
+            var cb = wb.cloneNode(true);
+            sanitizeDeep(cb);
+            wb.parentNode.appendChild(cb);
+          }
+        }
+        if (sms.length < 5 && sms.length) {
+          var ws2 = variantWrapper(sms[sms.length - 1]);
+          if (ws2 && ws2.parentNode) {
+            var cs = ws2.cloneNode(true);
+            sanitizeDeep(cs);
+            ws2.parentNode.appendChild(cs);
+          }
+        }
+        bigs = []; sms = [];
+        var pills2 = cats[k].querySelectorAll('div[data-framer-name="App Design"] h5');
+        for (var q2 = 0; q2 < pills2.length; q2++) {
+          var v2 = pillVariant(pills2[q2]);
+          if (v2 === "Sm") sms.push(pills2[q2]);
+          else bigs.push(pills2[q2]);
+        }
+      }
+      for (var b = 0; b < bigs.length && b < SVC_I[k].length; b++) {
+        if (bigs[b].textContent !== SVC_I[k][b]) return true;
+      }
+      for (var m2 = 0; m2 < sms.length && m2 < SVC_I[k].length; m2++) {
+        if (sms[m2].textContent !== SVC_I[k][m2]) return true;
+      }
+    }
+    return false;
+  }
   // Deleted paragraph guard: the "designing interfaces" paragraph was
   // removed by request. If hydration restores it, drop it again.
   // Scoped strictly to the Philosophy box; matches by its unique phrase.
@@ -478,6 +649,7 @@
     if (portraitNeedsApply()) return true;
     if (nameTitleNeedsApply()) return true;
     if (skillsNeedApply()) return true;
+    if (servicesNeedApply()) return true;
     return false;
   }
 
@@ -554,6 +726,7 @@
     n += applyPortrait();
     n += applyNameTitle();
     n += applySkills();
+    n += applyServices();
     if (n) state.brandApplies = (state.brandApplies || 0) + 1;
     return n;
   }
@@ -567,10 +740,12 @@
     var hero = document.getElementById("hero");
     var about = document.getElementById("about");
     var skills = document.getElementById("skills");
+    var services = document.getElementById("services");
     if (nav) targets.push(nav);
     if (hero) targets.push(hero);
     if (about) targets.push(about);
     if (skills) targets.push(skills);
+    if (services) targets.push(services);
     if (!targets.length) return;
     brandObserver = new MutationObserver(function () {
       clearTimeout(brandTimer);

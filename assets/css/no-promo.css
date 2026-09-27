@@ -8,6 +8,15 @@
   display: none !important;
 }
 
+/* Removed sections guard: Certifications + Articles(blog) were deleted
+   by request. Keep them hidden if the runtime ever restores them.
+   Scoped to those sections only — reversible by deleting these rules
+   and restoring the markup. */
+div[data-framer-name="Certifications"],
+section[data-framer-name="Articles"] {
+  display: none !important;
+}
+
 /* Skill items: pin to the viewer's right (Framer set them to logical
    "end", which lands on the left in RTL). Scoped to skills only. */
 #skills div[data-framer-name="Item"] p {
