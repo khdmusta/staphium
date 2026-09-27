@@ -17,6 +17,12 @@ section[data-framer-name="Articles"] {
   display: none !important;
 }
 
+/* Removed menu item guard: the blog link was deleted from the footer
+   menu by request. Hide the whole item if the runtime restores it. */
+div.framer-vwbw8t:has(a[href="./blog"]) {
+  display: none !important;
+}
+
 /* Skill items: pin to the viewer's right (Framer set them to logical
    "end", which lands on the left in RTL). Scoped to skills only. */
 #skills div[data-framer-name="Item"] p {
