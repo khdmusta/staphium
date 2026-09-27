@@ -119,7 +119,7 @@
   // - Fewer groups than rows → clone last group's tops until enough (capped).
   // - More groups than rows → extra groups hidden (their tops get display:none).
   function applyToSlots(grid, slotSel, rows, fill) {
-    if (!grid || !rows || !rows.length) return false;
+    if (!grid || !rows) return false; // null = fetch failed/offline -> keep Framer fallback
     var slots = $all(slotSel, grid).filter(function (s) { return grid.contains(s); });
     if (!slots.length) return false;
     var period = detectPeriod(slots.map(slotSig));
@@ -169,9 +169,30 @@
   }
 
   /* ---------- sections ---------------------------------------------------- */
+  function projectsSection(grid) {
+    var el = grid;
+    while (el && el !== document.body) {
+      var nm = el.getAttribute ? el.getAttribute("data-framer-name") : null;
+      var id = el.getAttribute ? el.getAttribute("id") : null;
+      if (nm === "Projects" || id === "projects") return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+
   function applyProjects(rows) {
     var grid = $('[data-framer-name="Projects Grid"]');
     if (!grid) return false;
+    var sec = projectsSection(grid);
+    if (!rows.length) {
+      // DB reachable but empty: display NOTHING (hide whole section).
+      if (sec) sec.style.display = "none";
+      $all('article[data-framer-name="Project Card CMS Item"]', grid).forEach(function (s) {
+        s.setAttribute("data-cms", "1");
+      });
+      return true;
+    }
+    if (sec) sec.style.display = "";
     return applyToSlots(grid, 'article[data-framer-name="Project Card CMS Item"]', rows, fillProject);
   }
 
@@ -941,9 +962,7 @@
         gal +
       "</div>";
     document.body.appendChild(d);
-    d.querySelector(".rzg-pg-back").addEventListener("click", function () {
-      window.location.assign("../");
-    });
+    d.querySelector(".rzg-pg-back").addEventListener("click", homeBack);
     document.title = entry.title + " | Staphium";
     try { window.scrollTo(0, 0); } catch (e) {}
   }
@@ -953,13 +972,49 @@
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  function homeBack() {
+    var to = window.location.pathname.replace(/\/projects\/[^/]+\/?$/, "/#projects");
+    if (to === window.location.pathname) to = "../#projects";
+    window.location.assign(to);
+  }
+
+  function renderNotFound(slug) {
+    hideDetail();
+    detailSlug = slug || "404";
+    var main = document.getElementById("main");
+    if (main) main.style.display = "none";
+    var d = document.createElement("div");
+    d.className = "rzg-project";
+    d.innerHTML =
+      '<div class="rzg-pg-inner">' +
+        '<button type="button" class="rzg-pg-back">→ عودة للمشاريع</button>' +
+        "<h1>المشروع غير موجود</h1>" +
+        '<p class="rzg-pg-cap">هذا العمل غير منشور حالياً.</p>' +
+      "</div>";
+    document.body.appendChild(d);
+    d.querySelector(".rzg-pg-back").addEventListener("click", homeBack);
+    document.title = "غير موجود | Staphium";
+    try { window.scrollTo(0, 0); } catch (e) {}
+  }
+
   function checkRoute() {
+    var path = window.location.pathname;
+    if (/\/projects\/?$/.test(path)) {
+      // Framer projects list page shows demo works -> send to home grid
+      // (only when the database answered; otherwise keep Framer behavior).
+      if (state.projectsFetched) {
+        window.location.assign(path.replace(/\/projects\/?$/, "/#projects"));
+      }
+      return;
+    }
     var slug = projectSlugFromPath();
     if (slug && galData[slug]) {
       if (detailSlug !== slug) renderDetail(slug);
-    } else {
-      if (detailSlug !== null) hideDetail();
-    }
+    } else if (slug) {
+      // unknown slug: block demo case studies, but only when DB reachable
+      if (state.projectsFetched) renderNotFound(slug);
+      else if (detailSlug !== null) hideDetail();
+    } else if (detailSlug !== null) hideDetail();
   }
 
   function goProject(slug) {
@@ -987,11 +1042,11 @@
   window.addEventListener("popstate", function () { setTimeout(checkRoute, 60); });
 
   /* ---------- orchestration ---------------------------------------------- */
-  var state = { projects: null, testimonials: null, posts: null, settings: null, applies: 0 };
+  var state = { projects: null, testimonials: null, posts: null, settings: null, applies: 0, projectsFetched: false };
 
   function paint() {
     var n = 0;
-    if (state.projects && state.projects.length) { if (applyProjects(state.projects)) n++; }
+    if (state.projects) { if (applyProjects(state.projects)) n++; }
     if (state.testimonials && state.testimonials.length) { if (applyTestimonials(state.testimonials)) n++; }
     if (state.posts && state.posts.length) { if (applyPosts(state.posts)) n++; }
     if (state.settings) { if (applySettings(state.settings)) n++; }
@@ -1063,6 +1118,7 @@
       window.RZG_CMS.listPublishedImages()
     ]).then(function (r) {
       state.projects = r[0]; state.testimonials = r[1]; state.posts = r[2]; state.settings = r[3];
+      state.projectsFetched = (r[0] !== null && r[0] !== undefined);
       buildGalleryMap(r[0], r[4]);
       paint();
       guard();
